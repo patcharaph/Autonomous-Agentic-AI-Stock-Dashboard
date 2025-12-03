@@ -30,6 +30,7 @@ const TIMEFRAMES = [
 ];
 
 export default function Dashboard() {
+  const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
   const [ticker, setTicker] = useState("AAPL");
   const [selectedFrame, setSelectedFrame] = useState(TIMEFRAMES[3]);
   const [candles, setCandles] = useState<Candle[]>([]);
@@ -46,9 +47,9 @@ export default function Dashboard() {
     try {
       const [pricesRes, newsRes] = await Promise.all([
         fetch(
-          `http://localhost:8000/api/market/history?ticker=${ticker}&period=${selectedFrame.period}&interval=${selectedFrame.interval}`
+          `${API_BASE}/api/market/history?ticker=${ticker}&period=${selectedFrame.period}&interval=${selectedFrame.interval}`
         ),
-        fetch(`http://localhost:8000/api/market/news?ticker=${ticker}`),
+        fetch(`${API_BASE}/api/market/news?ticker=${ticker}`),
       ]);
       const pricesJson = await pricesRes.json();
       const newsJson = await newsRes.json();
@@ -65,7 +66,7 @@ export default function Dashboard() {
     setStatus("analyzing");
     setReport({});
     try {
-      const res = await fetch(`http://localhost:8000/api/analyze?ticker=${ticker}`, { method: "POST" });
+      const res = await fetch(`${API_BASE}/api/analyze?ticker=${ticker}`, { method: "POST" });
       const { task_id } = await res.json();
       pollTask(task_id);
     } catch (error) {
@@ -76,7 +77,7 @@ export default function Dashboard() {
 
   const pollTask = async (taskId: string) => {
     const interval = setInterval(async () => {
-      const res = await fetch(`http://localhost:8000/api/analyze/${taskId}`);
+      const res = await fetch(`${API_BASE}/api/analyze/${taskId}`);
       const task = await res.json();
       if (task.status === "complete") {
         clearInterval(interval);
@@ -92,22 +93,28 @@ export default function Dashboard() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-8">
-        <header className="flex flex-col gap-4 rounded-2xl bg-slate-900/80 p-5 backdrop-blur">
-          <div className="flex flex-wrap items-center gap-3">
-            <input
-              value={ticker}
-              onChange={(e) => setTicker(e.target.value.toUpperCase())}
-              className="w-32 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-lg font-semibold focus:outline-none"
-              placeholder="AAPL"
-            />
-            <div className="flex gap-2">
+    <main className="relative min-h-screen">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(16,185,129,0.1),transparent_25%),radial-gradient(circle_at_80%_0%,rgba(59,130,246,0.12),transparent_20%),radial-gradient(circle_at_50%_70%,rgba(236,72,153,0.08),transparent_25%)]" />
+      <div className="relative mx-auto flex max-w-6xl flex-col gap-6 px-6 py-8">
+        <header className="flex flex-col gap-5 rounded-2xl border border-white/5 bg-white/5 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 shadow-inner shadow-black/40">
+              <div className="text-xs uppercase tracking-[0.2em] text-emerald-300/80">Ticker</div>
+              <input
+                value={ticker}
+                onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                className="w-32 rounded-xl bg-transparent text-lg font-semibold text-white placeholder:text-slate-500 focus:outline-none"
+                placeholder="AAPL"
+              />
+            </div>
+            <div className="flex gap-2 rounded-2xl border border-white/10 bg-white/5 p-1 shadow-inner shadow-black/40">
               {TIMEFRAMES.map((tf) => (
                 <button
                   key={tf.label}
-                  className={`rounded-xl px-3 py-2 text-sm font-semibold ${
-                    tf.label === selectedFrame.label ? "bg-emerald-500 text-slate-900" : "bg-slate-800 text-slate-200"
+                  className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                    tf.label === selectedFrame.label
+                      ? "bg-emerald-500 text-slate-900 shadow-lg shadow-emerald-500/40"
+                      : "text-slate-200 hover:bg-white/5"
                   }`}
                   onClick={() => setSelectedFrame(tf)}
                 >
@@ -115,47 +122,54 @@ export default function Dashboard() {
                 </button>
               ))}
             </div>
-            <button
-              onClick={loadMarketData}
-              className="rounded-xl bg-blue-500 px-4 py-2 font-semibold text-white hover:bg-blue-400"
-              disabled={status === "loading"}
-            >
-              Refresh
-            </button>
-            <button
-              onClick={handleAnalyze}
-              className="rounded-xl bg-emerald-500 px-4 py-2 font-semibold text-slate-900 hover:bg-emerald-400"
-              disabled={status !== "idle"}
-            >
-              {status === "analyzing" ? "Analyzing..." : "Analyze"}
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={loadMarketData}
+                className="rounded-xl bg-sky-500/90 px-4 py-2 font-semibold text-slate-900 shadow-lg shadow-sky-500/40 transition hover:bg-sky-400"
+                disabled={status === "loading"}
+              >
+                Refresh
+              </button>
+              <button
+                onClick={handleAnalyze}
+                className="rounded-xl bg-emerald-500 px-4 py-2 font-semibold text-slate-900 shadow-lg shadow-emerald-500/40 transition hover:bg-emerald-400"
+                disabled={status !== "idle"}
+              >
+                {status === "analyzing" ? "Analyzing..." : "Analyze"}
+              </button>
+            </div>
           </div>
-          <p className="text-sm text-slate-300">
+          <p className="max-w-3xl text-sm text-slate-300">
             Autonomous multi-agent analysis: researcher → analyst → writer → critic. Reports return in Thai with raw metrics.
           </p>
         </header>
 
-        <Chart candles={candles} />
+        <div className="rounded-2xl border border-white/5 bg-white/5 p-4 shadow-2xl shadow-black/30 backdrop-blur-xl">
+          <Chart candles={candles} />
+        </div>
 
         <section className="grid gap-4 md:grid-cols-3">
-          <div className="md:col-span-2 rounded-2xl bg-slate-900/80 p-5">
-            <h2 className="mb-3 text-lg font-semibold">AI Insight (JSON Render)</h2>
+          <div className="md:col-span-2 rounded-2xl border border-white/5 bg-white/5 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-white">AI Insight (JSON Render)</h2>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-emerald-200">Live</span>
+            </div>
             {report.executive_summary ? (
               <div className="space-y-2 text-sm leading-relaxed text-slate-200">
                 <p>
-                  <span className="font-semibold text-emerald-400">Executive Summary:</span> {report.executive_summary}
+                  <span className="font-semibold text-emerald-300">Executive Summary:</span> {report.executive_summary}
                 </p>
                 <p>
-                  <span className="font-semibold text-blue-400">Technical Outlook:</span> {report.technical_outlook}
+                  <span className="font-semibold text-blue-300">Technical Outlook:</span> {report.technical_outlook}
                 </p>
                 <p>
-                  <span className="font-semibold text-amber-400">Risks:</span> {report.risks}
+                  <span className="font-semibold text-amber-300">Risks:</span> {report.risks}
                 </p>
                 <p>
-                  <span className="font-semibold text-fuchsia-400">Strategy:</span> {report.strategy}
+                  <span className="font-semibold text-fuchsia-300">Strategy:</span> {report.strategy}
                 </p>
                 <p className="text-xs text-slate-400">Confidence: {report.confidence}</p>
-                <pre className="mt-2 max-h-64 overflow-auto rounded-lg bg-slate-950 p-3 text-[11px] text-slate-200">
+                <pre className="mt-2 max-h-64 overflow-auto rounded-lg border border-white/5 bg-black/60 p-3 text-[11px] text-slate-200 backdrop-blur">
 {JSON.stringify(report.technical_indicators, null, 2)}
                 </pre>
               </div>
@@ -163,8 +177,8 @@ export default function Dashboard() {
               <p className="text-sm text-slate-400">Trigger analysis to see the autonomous report.</p>
             )}
           </div>
-          <div className="rounded-2xl bg-slate-900/80 p-5">
-            <h2 className="mb-3 text-lg font-semibold">News & Sentiment</h2>
+          <div className="rounded-2xl border border-white/5 bg-white/5 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl">
+            <h2 className="mb-3 text-lg font-semibold text-white">News & Sentiment</h2>
             <div className="flex max-h-96 flex-col gap-3 overflow-auto">
               {news.length === 0 && <p className="text-sm text-slate-400">No news fetched (soft fail safe).</p>}
               {news.map((item) => (
@@ -173,11 +187,11 @@ export default function Dashboard() {
                   href={item.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="group rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 hover:border-emerald-400"
+                  className="group rounded-xl border border-white/5 bg-black/50 px-3 py-2 shadow-inner shadow-black/50 transition hover:border-emerald-400/60"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-slate-100 group-hover:text-emerald-300">{item.title}</p>
-                    <span className="rounded-lg bg-slate-800 px-2 py-1 text-xs text-emerald-300">
+                    <span className="rounded-lg bg-white/5 px-2 py-1 text-xs text-emerald-300">
                       {item.score ? item.score.toFixed(2) : "Neutral"}
                     </span>
                   </div>

@@ -4,7 +4,7 @@ This project delivers a TradingView-style dashboard backed by a LangGraph multi-
 
 ## Stack
 - Frontend: Next.js 14 (App Router), TypeScript, Tailwind CSS, lightweight-charts
-- Backend: FastAPI, LangGraph for state workflow, pandas/pandas-ta/yfinance for deterministic TA
+- Backend: FastAPI, LangGraph for state workflow, pandas/yfinance for deterministic TA
 - DB (planned): PostgreSQL + TimescaleDB for time-series (hooks ready to attach)
 - LLM: GPT-4o (default, configurable), Claude 3.5 Sonnet compatible
 
@@ -22,7 +22,12 @@ This project delivers a TradingView-style dashboard backed by a LangGraph multi-
 pip install -r backend/requirements.txt
 uvicorn backend.main:app --reload --port 8000
 ```
-Set `OPENAI_API_KEY` (and `TAVILY_API_KEY` for news) in your environment.
+If `pip install -r backend/requirements.txt` fails on Windows, first upgrade pip:
+```bash
+python -m pip install --upgrade pip
+```
+Then rerun `pip install -r backend/requirements.txt`.
+Set `OPENROUTER_API_KEY` (and `TAVILY_API_KEY` for news) in your environment.
 
 2) Frontend (Node 18+):
 ```bash

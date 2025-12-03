@@ -48,6 +48,18 @@ export function Chart({ candles, indicators, rsi, macd }: Props) {
   const chartRef = useRef<IChartApi | null>(null);
   const [showSMA, setShowSMA] = useState({ sma50: true, sma200: true, ema20: false });
 
+  const normalizedCandles: CandlestickData[] = (candles || []).map((c) => {
+    const day = typeof c.time === "string" && c.time.includes("T") ? c.time.split("T")[0] : c.time;
+    return {
+      time: day as string,
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+      value: c.volume,
+    } as CandlestickData;
+  });
+
   useEffect(() => {
     if (!containerRef.current) return;
     const chart = createChart(containerRef.current, { width: containerRef.current.clientWidth, height: 480, ...chartOptions });
@@ -61,7 +73,7 @@ export function Chart({ candles, indicators, rsi, macd }: Props) {
       borderUpColor: "#6EE7B7",
       borderDownColor: "#FCA5A5",
     });
-    candleSeries.setData(candles as CandlestickData[]);
+    candleSeries.setData(normalizedCandles);
 
     const volumeSeries = chart.addHistogramSeries({
       priceFormat: { type: "volume" },
@@ -69,10 +81,10 @@ export function Chart({ candles, indicators, rsi, macd }: Props) {
       color: "#4b5563",
       priceLineVisible: false,
     });
-    volumeSeries.priceScale().setScaleMargins({ top: 0.8, bottom: 0 });
+    chart.priceScale("").applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
     volumeSeries.setData(
       candles.map((c) => ({
-        time: c.time,
+        time: typeof c.time === "string" && c.time.includes("T") ? c.time.split("T")[0] : (c.time as any),
         value: c.volume ?? 0,
         color: c.close >= c.open ? "rgba(110, 231, 183, 0.5)" : "rgba(252, 165, 165, 0.5)",
       }))
@@ -94,13 +106,13 @@ export function Chart({ candles, indicators, rsi, macd }: Props) {
     // RSI + MACD sub-panels could be rendered in dedicated charts; keep inline for brevity
     if (rsi) {
       const rsiLine = chart.addLineSeries({ color: "#f472b6", lineWidth: 2, priceScaleId: "rsi" });
-      rsiLine.priceScale().setScaleMargins({ top: 0.2, bottom: 0.6 });
+      chart.priceScale("rsi").applyOptions({ scaleMargins: { top: 0.2, bottom: 0.6 } });
       rsiLine.setData(rsi);
     }
 
     if (macd) {
       const macdLine = chart.addLineSeries({ color: "#22d3ee", lineWidth: 2, priceScaleId: "macd" });
-      macdLine.priceScale().setScaleMargins({ top: 0.6, bottom: 0 });
+      chart.priceScale("macd").applyOptions({ scaleMargins: { top: 0.6, bottom: 0 } });
       macdLine.setData(macd.macd);
 
       const signalLine = chart.addLineSeries({ color: "#f97316", lineWidth: 2, priceScaleId: "macd" });

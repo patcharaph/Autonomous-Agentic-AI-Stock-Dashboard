@@ -47,7 +47,10 @@ def writer_node(state: AgentState, config: dict | None = None, client: OpenAI | 
     """
     model = os.getenv("REPORT_MODEL", "gpt-4o")
     cfg_client = (config or {}).get("configurable", {}).get("client") if config else None
-    client = client or cfg_client or OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    client = client or cfg_client or OpenAI(
+        api_key=os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY"),
+        base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+    )
 
     system_prompt = (
         "คุณคือ Senior Investment Analyst. "
