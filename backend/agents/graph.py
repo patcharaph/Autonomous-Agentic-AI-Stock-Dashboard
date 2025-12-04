@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import uuid
 from typing import Any, TypedDict
 
 from langgraph.checkpoint.memory import MemorySaver
@@ -162,7 +163,10 @@ def build_graph() -> Any:
     return graph.compile(checkpointer=memory)
 
 
-def run_workflow(ticker: str, client: OpenAI | None = None) -> AgentState:
+def run_workflow(ticker: str, client: OpenAI | None = None, thread_id: str | None = None) -> AgentState:
+    """
+    Execute the agent graph with a per-invocation thread_id (required by MemorySaver).
+    """
     app = build_graph()
     initial_state: AgentState = {
         "ticker": ticker,
@@ -173,4 +177,10 @@ def run_workflow(ticker: str, client: OpenAI | None = None) -> AgentState:
         "critic_feedback": "",
         "revision_count": 0,
     }
-    return app.invoke(initial_state, config={"configurable": {"client": client}})
+    config = {
+        "configurable": {
+            "client": client,
+            "thread_id": thread_id or str(uuid.uuid4()),
+        }
+    }
+    return app.invoke(initial_state, config=config)

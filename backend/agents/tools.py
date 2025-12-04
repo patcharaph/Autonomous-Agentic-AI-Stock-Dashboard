@@ -25,9 +25,11 @@ def fetch_prices(
     last_exception: Exception | None = None
     while attempt < max_retries:
         try:
-            df = yf.download(ticker, period=period, interval=interval, progress=False)
+            df = yf.download(ticker, period=period, interval=interval, progress=False, auto_adjust=False)
             if df is None or df.empty:
                 raise ValueError("Received empty price data.")
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.droplevel(level=1)
             df = df.rename(
                 columns={
                     "Open": "open",

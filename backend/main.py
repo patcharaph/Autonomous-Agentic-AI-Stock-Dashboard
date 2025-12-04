@@ -1,13 +1,18 @@
 import asyncio
 import uuid
-from typing import Any, Dict, Literal
+from typing import Any, Dict, Literal, Tuple
 
 import pandas as pd
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 
 from backend.agents.graph import run_workflow
 from backend.agents.tools import fetch_news, fetch_prices
+
+
+# Load environment variables from .env (local dev convenience)
+load_dotenv()
 
 
 app = FastAPI(title="Agentic Stock Dashboard API", version="0.1.0")
@@ -25,23 +30,79 @@ tasks: Dict[str, Dict[str, Any]] = {}
 
 
 def df_to_ohlcv(df: pd.DataFrame) -> list[dict[str, Any]]:
-    return [
-        {
-            "time": idx.isoformat(),
-            "open": float(row["open"]),
-            "high": float(row["high"]),
-            "low": float(row["low"]),
-            "close": float(row["close"]),
-            "volume": float(row["volume"]),
-        }
-        for idx, row in df.iterrows()
-    ]
+    candles: list[dict[str, Any]] = []
+    for row in df.itertuples():
+        ts = getattr(row, "Index")
+        time_str = ts.date().isoformat() if hasattr(ts, "date") else str(ts)
+        candles.append(
+            {
+                "time": time_str,
+                "open": float(row.open),
+                "high": float(row.high),
+                "low": float(row.low),
+                "close": float(row.close),
+                "volume": float(row.volume),
+            }
+        )
+    return candles
+
+
+def indicator_series(df: pd.DataFrame) -> Tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+    """
+    Build lightweight-charts-ready series for SMA/EMA overlays plus RSI & MACD panels.
+    Uses min_periods=1 so short timeframes still render lines instead of empty overlays.
+    """
+    close = df["close"]
+
+    sma50 = close.rolling(window=50, min_periods=1).mean()
+    sma200 = close.rolling(window=200, min_periods=1).mean()
+    ema20 = close.ewm(span=20, adjust=False).mean()
+
+    delta = close.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.ewm(alpha=1 / 14, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1 / 14, adjust=False).mean()
+    rs = avg_gain / avg_loss.replace(0, pd.NA)
+    rsi_series = 100 - (100 / (1 + rs))
+
+    ema_fast = close.ewm(span=12, adjust=False).mean()
+    ema_slow = close.ewm(span=26, adjust=False).mean()
+    macd_line = ema_fast - ema_slow
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    macd_hist = macd_line - signal_line
+
+    def to_line(series: pd.Series) -> list[dict[str, Any]]:
+        return [
+            {"time": idx.date().isoformat() if hasattr(idx, "date") else str(idx), "value": float(val)}
+            for idx, val in series.dropna().items()
+        ]
+
+    overlays = {
+        "sma50": to_line(sma50),
+        "sma200": to_line(sma200),
+        "ema20": to_line(ema20),
+    }
+    rsi = to_line(rsi_series)
+    macd = {
+        "macd": to_line(macd_line),
+        "signal": to_line(signal_line),
+        "histogram": to_line(macd_hist),
+    }
+    return overlays, rsi, macd
 
 
 @app.get("/api/market/history")
 def get_history(ticker: str, period: str = "1y", interval: str = "1d"):
     df = fetch_prices(ticker, period=period, interval=interval)
-    return {"ticker": ticker, "candles": df_to_ohlcv(df)}
+    overlays, rsi, macd = indicator_series(df)
+    return {
+        "ticker": ticker,
+        "candles": df_to_ohlcv(df),
+        "indicators": overlays,
+        "rsi": rsi,
+        "macd": macd,
+    }
 
 
 @app.get("/api/market/news")

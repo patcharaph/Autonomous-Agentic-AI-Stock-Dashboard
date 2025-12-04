@@ -1,4 +1,5 @@
 # Autonomous Agentic AI Stock Dashboard
+![tests](https://img.shields.io/badge/tests-pytest-%234C1.svg)
 
 This project delivers a TradingView-style dashboard backed by a LangGraph multi-agent workflow (Researcher → Analyst → Writer → Critic) with FastAPI and a Next.js 14 frontend. Philosophy: deterministic math in Python; LLM only for reasoning and Thai-language reporting.
 
@@ -37,6 +38,17 @@ npm run dev
 ```
 Configure the frontend to call `http://localhost:8000` or proxy via `NEXT_PUBLIC_API_BASE`.
 
+## Configuration
+Set env vars (or use `.env`):
+```
+OPENROUTER_API_KEY=sk-...
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+TAVILY_API_KEY=tvly-...
+REPORT_MODEL=gpt-4o
+NEXT_PUBLIC_API_BASE=http://localhost:8000
+```
+Optional DB hook (placeholder for future persistence): `POSTGRES_URL=postgresql://user:password@localhost:5432/agentic_db`.
+
 ## API
 - `GET /api/market/history?ticker=AAPL&period=1y&interval=1d` → OHLCV for charts
 - `GET /api/market/news?ticker=AAPL` → soft-fail news list
@@ -68,3 +80,22 @@ graph TD
 - Researcher retries prices (3x) then fails; news failures return `[]` so the pipeline never crashes.
 - Critic enforces JSON + numeric parity with computed indicators; after 2 failed revisions it publishes with `Low` confidence to avoid infinite loops.
 - Frontend renders the AI report in Thai with exact technical values; export-to-PDF/Markdown can be added by wiring the JSON to your preferred exporter.
+
+## Testing
+- Unit: `pytest` (or `tox -e py310`) — covers indicator math (RSI, MACD, SMA50/200, EMA20, Bollinger) and FastAPI endpoints with mocked dependencies.
+- Dev deps: `pip install -r backend/requirements-dev.txt`.
+
+## Docker / Compose
+- Backend: `Dockerfile.backend` (FastAPI + uvicorn)
+- Frontend: `Dockerfile.frontend` (Next.js build + start)
+- One-shot: `docker-compose up --build` (frontend on `:3000`, backend on `:8000`, optional Postgres on `:5432`).
+
+## Screenshots
+Add a dashboard capture (e.g., `docs/screenshot.png`) showing candlesticks + overlays + Thai analysis to make the repo presentation-ready.
+
+## Architecture Overview
+- Frontend (Next.js) ↔ Backend (FastAPI) ↔ LLM (OpenRouter/OpenAI) ↔ Market Data (yfinance) ↔ News (Tavily).
+- Agents: Researcher (data), Analyst (math), Writer (Thai narrative), Critic (structure/consistency).
+
+## Disclaimer
+This dashboard is for educational/research purposes only and is **not** financial advice. Use at your own risk. 

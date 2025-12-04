@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { BarData, LineData } from "lightweight-charts";
 import { Chart } from "../components/Chart";
 
 type Candle = {
@@ -22,6 +23,18 @@ type Report = {
   confidence?: string;
 };
 
+type IndicatorSeries = {
+  sma50?: LineData[];
+  sma200?: LineData[];
+  ema20?: LineData[];
+};
+
+type MacdSeries = {
+  macd: LineData[];
+  signal: LineData[];
+  histogram: BarData[];
+};
+
 const TIMEFRAMES = [
   { label: "1D", period: "5d", interval: "30m" },
   { label: "1W", period: "1mo", interval: "1h" },
@@ -34,9 +47,13 @@ export default function Dashboard() {
   const [ticker, setTicker] = useState("AAPL");
   const [selectedFrame, setSelectedFrame] = useState(TIMEFRAMES[3]);
   const [candles, setCandles] = useState<Candle[]>([]);
+  const [indicators, setIndicators] = useState<IndicatorSeries>({});
+  const [rsiSeries, setRsiSeries] = useState<LineData[]>([]);
+  const [macdSeries, setMacdSeries] = useState<MacdSeries | null>(null);
   const [news, setNews] = useState<any[]>([]);
   const [report, setReport] = useState<Report>({});
   const [status, setStatus] = useState<"idle" | "loading" | "analyzing">("idle");
+  const [errorMsg, setErrorMsg] = useState<string>("");
 
   useEffect(() => {
     loadMarketData();
@@ -44,6 +61,7 @@ export default function Dashboard() {
 
   const loadMarketData = async () => {
     setStatus("loading");
+    setErrorMsg("");
     try {
       const [pricesRes, newsRes] = await Promise.all([
         fetch(
@@ -54,6 +72,9 @@ export default function Dashboard() {
       const pricesJson = await pricesRes.json();
       const newsJson = await newsRes.json();
       setCandles(pricesJson.candles);
+      setIndicators(pricesJson.indicators || {});
+      setRsiSeries(pricesJson.rsi || []);
+      setMacdSeries(pricesJson.macd || null);
       setNews(newsJson.news || []);
     } catch (error) {
       console.error(error);
@@ -65,12 +86,17 @@ export default function Dashboard() {
   const handleAnalyze = async () => {
     setStatus("analyzing");
     setReport({});
+    setErrorMsg("");
     try {
       const res = await fetch(`${API_BASE}/api/analyze?ticker=${ticker}`, { method: "POST" });
+      if (!res.ok) {
+        throw new Error(`Analyze failed: ${res.status}`);
+      }
       const { task_id } = await res.json();
       pollTask(task_id);
     } catch (error) {
       console.error(error);
+      setErrorMsg("Analyze request failed. Check API key / backend logs.");
       setStatus("idle");
     }
   };
@@ -87,6 +113,7 @@ export default function Dashboard() {
       if (task.status === "error") {
         clearInterval(interval);
         console.error(task.error);
+        setErrorMsg(task.error || "Agent run failed. Check backend logs or API keys.");
         setStatus("idle");
       }
     }, 1500);
@@ -145,7 +172,7 @@ export default function Dashboard() {
         </header>
 
         <div className="rounded-2xl border border-white/5 bg-white/5 p-4 shadow-2xl shadow-black/30 backdrop-blur-xl">
-          <Chart candles={candles} />
+          <Chart candles={candles} indicators={indicators} rsi={rsiSeries} macd={macdSeries || undefined} />
         </div>
 
         <section className="grid gap-4 md:grid-cols-3">
@@ -174,7 +201,11 @@ export default function Dashboard() {
                 </pre>
               </div>
             ) : (
-              <p className="text-sm text-slate-400">Trigger analysis to see the autonomous report.</p>
+              <div className="space-y-2 text-sm text-slate-400">
+                <p>Trigger analysis to see the autonomous report.</p>
+                {status === "analyzing" && <p className="text-emerald-300">Analyzing…</p>}
+                {errorMsg && <p className="text-rose-300">Error: {errorMsg}</p>}
+              </div>
             )}
           </div>
           <div className="rounded-2xl border border-white/5 bg-white/5 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl">
