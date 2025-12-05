@@ -43,11 +43,19 @@ Set env vars (or use `.env`):
 ```
 OPENROUTER_API_KEY=sk-...
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_REFERRER=http://localhost
+OPENROUTER_APP_NAME=Agentic Stock Dashboard
 TAVILY_API_KEY=tvly-...
 REPORT_MODEL=gpt-4o
+NEWS_SUMMARY_MODEL=gpt-4o-mini
 NEXT_PUBLIC_API_BASE=http://localhost:8000
+# Or use OpenAI directly (leave the OpenRouter vars unset)
+OPENAI_API_KEY=sk-...
+OPENAI_BASE_URL=https://api.openai.com/v1
 ```
 Optional DB hook (placeholder for future persistence): `POSTGRES_URL=postgresql://user:password@localhost:5432/agentic_db`.
+
+If you see `401 User not found`, it usually means an OpenAI key is being sent to the OpenRouter endpoint; clear the `OPENROUTER_*` vars or supply a valid OpenRouter key.
 
 ## API
 - `GET /api/market/history?ticker=AAPL&period=1y&interval=1d` → OHLCV for charts
@@ -96,6 +104,12 @@ Add a dashboard capture (e.g., `docs/screenshot.png`) showing candlesticks + ove
 ## Architecture Overview
 - Frontend (Next.js) ↔ Backend (FastAPI) ↔ LLM (OpenRouter/OpenAI) ↔ Market Data (yfinance) ↔ News (Tavily).
 - Agents: Researcher (data), Analyst (math), Writer (Thai narrative), Critic (structure/consistency).
+
+## Agent Nodes (4-step workflow)
+- **Node 1: Researcher (`researcher_node`)** — pulls market data and news via `fetch_prices` and `fetch_news`, drops both into the shared state as `raw_prices` and `news_data`.
+- **Node 2: Analyst (`analyst_node`)** — deterministic math only; calls `compute_indicators` (pandas-based RSI, MACD, SMA50/200, EMA20, Bollinger, simple signals) and stores results in `technical_indicators`.
+- **Node 3: Writer (`writer_node`)** — LLM (default GPT-4o) crafts a Thai report from the indicators + news, forcing JSON output and injecting the exact numeric payload; loops with critic feedback if present.
+- **Node 4: Critic (`critic_node`)** — checks JSON completeness and exact indicator parity; if mismatched, adds feedback and triggers up to two rewrites, otherwise marks confidence High and ends the graph.
 
 ## Disclaimer
 This dashboard is for educational/research purposes only and is **not** financial advice. Use at your own risk. 

@@ -6,6 +6,7 @@ from typing import Any, TypedDict
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
+from langgraph.types import RunnableConfig
 from openai import OpenAI
 
 from backend.agents.tools import fetch_news, fetch_prices
@@ -41,17 +42,39 @@ def analyst_node(state: AgentState) -> AgentState:
     return {**state, "technical_indicators": indicators}
 
 
-def writer_node(state: AgentState, config: dict | None = None, client: OpenAI | None = None) -> AgentState:
+def writer_node(state: AgentState, config: RunnableConfig | None = None, client: OpenAI | None = None) -> AgentState:
     """
     Uses GPT-4o (or model override) to craft a Thai report.
     Enforces JSON-only output and injects exact indicator values for the critic to verify.
     """
     model = os.getenv("REPORT_MODEL", "gpt-4o")
     cfg_client = (config or {}).get("configurable", {}).get("client") if config else None
-    client = client or cfg_client or OpenAI(
-        api_key=os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY"),
-        base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
-    )
+
+    def build_client() -> OpenAI:
+        """
+        Prefer OpenRouter when its key is present; otherwise fall back to the default OpenAI endpoint.
+        Prevents the common 401 "User not found" that happens when an OpenAI key is pointed at OpenRouter.
+        """
+        openrouter_key = os.getenv("OPENROUTER_API_KEY")
+        openai_key = os.getenv("OPENAI_API_KEY")
+        if openrouter_key:
+            default_headers = {
+                "HTTP-Referer": os.getenv("OPENROUTER_REFERRER", "http://localhost"),
+                "X-Title": os.getenv("OPENROUTER_APP_NAME", "Agentic Stock Dashboard"),
+            }
+            return OpenAI(
+                api_key=openrouter_key,
+                base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+                default_headers=default_headers,
+            )
+        if openai_key:
+            base_url = os.getenv("OPENAI_BASE_URL")
+            if base_url:
+                return OpenAI(api_key=openai_key, base_url=base_url)
+            return OpenAI(api_key=openai_key)
+        raise RuntimeError("Missing LLM credentials: set OPENROUTER_API_KEY or OPENAI_API_KEY.")
+
+    client = client or cfg_client or build_client()
 
     system_prompt = (
         "คุณคือ Senior Investment Analyst. "
@@ -82,12 +105,18 @@ def writer_node(state: AgentState, config: dict | None = None, client: OpenAI | 
         },
     ]
 
-    response = client.chat.completions.create(
-        model=model,
-        messages=messages,
-        response_format={"type": "json_object"},
-        temperature=0.2,
-    )
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            response_format={"type": "json_object"},
+            temperature=0.2,
+        )
+    except Exception as exc:
+        status = getattr(exc, "status_code", None) or getattr(getattr(exc, "response", None), "status_code", None)
+        if status == 401:
+            raise RuntimeError("LLM authentication failed (401). Ensure the API key matches the provider/base URL.") from exc
+        raise
     content = response.choices[0].message.content or "{}"
     draft = json.loads(content)
     # Ensure indicators are injected exactly

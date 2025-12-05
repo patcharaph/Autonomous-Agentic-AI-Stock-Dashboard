@@ -51,6 +51,7 @@ export default function Dashboard() {
   const [rsiSeries, setRsiSeries] = useState<LineData[]>([]);
   const [macdSeries, setMacdSeries] = useState<MacdSeries | null>(null);
   const [news, setNews] = useState<any[]>([]);
+  const [newsSummary, setNewsSummary] = useState<string>("");
   const [report, setReport] = useState<Report>({});
   const [status, setStatus] = useState<"idle" | "loading" | "analyzing">("idle");
   const [errorMsg, setErrorMsg] = useState<string>("");
@@ -76,6 +77,7 @@ export default function Dashboard() {
       setRsiSeries(pricesJson.rsi || []);
       setMacdSeries(pricesJson.macd || null);
       setNews(newsJson.news || []);
+      setNewsSummary(newsJson.summary || "");
     } catch (error) {
       console.error(error);
     } finally {
@@ -210,6 +212,12 @@ export default function Dashboard() {
           </div>
           <div className="rounded-2xl border border-white/5 bg-white/5 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl">
             <h2 className="mb-3 text-lg font-semibold text-white">News & Sentiment</h2>
+            {newsSummary && (
+              <div className="mb-3 rounded-xl border border-emerald-400/40 bg-emerald-400/10 p-3 text-sm text-emerald-100 shadow-inner shadow-emerald-900/30">
+                <p className="font-semibold text-emerald-200">LLM Summary</p>
+                <p className="text-slate-100">{newsSummary}</p>
+              </div>
+            )}
             <div className="flex max-h-96 flex-col gap-3 overflow-auto">
               {news.length === 0 && <p className="text-sm text-slate-400">No news fetched (soft fail safe).</p>}
               {news.map((item) => (
@@ -226,7 +234,7 @@ export default function Dashboard() {
                       {item.score ? item.score.toFixed(2) : "Neutral"}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400">{item.excerpt}</p>
+                  <p className="text-xs text-slate-400">{item.summary || item.excerpt}</p>
                 </a>
               ))}
             </div>

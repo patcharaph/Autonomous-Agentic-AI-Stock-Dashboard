@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from backend.agents.graph import run_workflow
-from backend.agents.tools import fetch_news, fetch_prices
+from backend.agents.tools import fetch_news, fetch_prices, summarize_news_items
 
 
 # Load environment variables from .env (local dev convenience)
@@ -107,7 +107,9 @@ def get_history(ticker: str, period: str = "1y", interval: str = "1d"):
 
 @app.get("/api/market/news")
 def get_news(ticker: str, limit: int = 10):
-    return {"ticker": ticker, "news": fetch_news(ticker, limit=limit)}
+    raw_news = fetch_news(ticker, limit=limit)
+    summarized, overall = summarize_news_items(raw_news)
+    return {"ticker": ticker, "news": summarized, "summary": overall}
 
 
 async def _run_task(task_id: str, ticker: str):
